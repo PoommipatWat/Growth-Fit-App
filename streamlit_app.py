@@ -159,7 +159,7 @@ if calc_btn:
                   line=dict(color='crimson', dash='dash', width=1))
 
     fig.update_layout(
-            height=1000,              # ลดจาก 1200 เป็น 800 เพื่อไม่ให้ล้นจอ
+            height=1200,              # ลดจาก 1200 เป็น 800 เพื่อไม่ให้ล้นจอ
             autosize=True,           # ให้กราฟปรับขนาดตาม container อัตโนมัติ
             hovermode='closest',     
             hoverdistance=30,        
