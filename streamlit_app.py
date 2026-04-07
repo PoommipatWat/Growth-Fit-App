@@ -159,20 +159,23 @@ if calc_btn:
                   line=dict(color='crimson', dash='dash', width=1))
 
     fig.update_layout(
-        height=1200,
-        hovermode='closest',        # ← snap ไปหาจุดที่ใกล้สุด
-        hoverdistance=30,            # ← รัศมีดูด pixel
-        spikedistance=-1,            # ← crosshair ลากตลอด
-        legend=dict(
-            orientation='v',
-            x=0.01, y=0.99,
-            bgcolor='rgba(255,255,255,0.8)',
-            bordercolor='lightgray', borderwidth=1
-        ),
-        plot_bgcolor='#fafafa',
-        paper_bgcolor='white',
-        margin=dict(l=60, r=80, t=60, b=40),
-    )
+            height=1000,              # ลดจาก 1200 เป็น 800 เพื่อไม่ให้ล้นจอ
+            autosize=True,           # ให้กราฟปรับขนาดตาม container อัตโนมัติ
+            hovermode='closest',     
+            hoverdistance=30,        
+            spikedistance=-1,        
+            legend=dict(
+                orientation='h',     # เปลี่ยนเป็นแนวนอน (horizontal)
+                yanchor="bottom",    # ยึดจากขอบล่างของ legend
+                y=1.02,              # ดันขึ้นไปไว้เหนือขอบกราฟเล็กน้อย
+                xanchor="right",
+                x=1,
+                bgcolor='rgba(255,255,255,0)', # โปร่งใส
+            ),
+            plot_bgcolor='#fafafa',
+            paper_bgcolor='white',
+            margin=dict(l=40, r=40, t=80, b=40), # ลดขอบซ้าย/ขวาลง เพื่อเพิ่มพื้นที่กราฟบนจอมือถือ
+        )
 
     # Crosshair spike lines ทั้ง 2 axes
     spike_style = dict(
