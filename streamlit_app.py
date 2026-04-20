@@ -79,7 +79,6 @@ if 'export_h' not in st.session_state:
 if 'scale_mode' not in st.session_state:
     st.session_state['scale_mode'] = "Auto (อัตโนมัติ)"
 
-# ฟังก์ชันซิงค์ข้อมูลระหว่าง Slider และ Number Input
 def sync_w_from_slider(): st.session_state['export_w'] = st.session_state['w_slider']
 def sync_w_from_num(): st.session_state['export_w'] = st.session_state['w_num']
 def sync_h_from_slider(): st.session_state['export_h'] = st.session_state['h_slider']
@@ -190,8 +189,8 @@ if len(x_raw) >= 4 and len(x_raw) == len(y_raw):
         # UI Metrics
         st.subheader(f"ผลลัพธ์: **{model_choice}**")
         c = st.columns(5)
-        c[0].metric("R²", f"{r2:.4f}")
-        c[1].metric("RMSE", f"{rmse:.4f}")
+        c[0].metric("R²", f"{r2:.6f}")
+        c[1].metric("RMSE", f"{rmse:.6f}")
         c[2].metric("AIC", f"{aic:.2f}")
         c[3].metric("BIC", f"{bic:.2f}")
 
@@ -201,6 +200,15 @@ if len(x_raw) >= 4 and len(x_raw) == len(y_raw):
         dy = np.gradient(yd, xd)
         idx = np.argmax(dy)
         x_ms, slope_val, y_ms = xd[idx], dy[idx], yd[idx]
+        
+        # คำนวณขอบเขตสำหรับวาดเส้น Tangent และจุดตัด (Intersection)
+        span = (x_raw.max() - x_raw.min()) * 0.25
+        x_tan = np.linspace(x_ms - span, x_ms + span, 300)
+        y_tan = slope_val * (x_tan - x_ms) + y_ms
+        bot_disp = popt[0]
+        top_disp = popt[1]
+        x_bot_intersect = x_ms - (y_ms - bot_disp) / slope_val if slope_val != 0 else x_ms
+        
         c[4].metric("Max Rate", f"{slope_val:.4f}/h")
 
         st.write("**Parameters Table:**")
@@ -209,15 +217,30 @@ if len(x_raw) >= 4 and len(x_raw) == len(y_raw):
         # ── Chart Plotly ──
         fig = make_subplots(rows=2, cols=1, row_heights=[0.75, 0.25], shared_xaxes=True, vertical_spacing=0.05, subplot_titles=(title_input, "Growth Rate (d/dt)"))
         
+        # เส้นข้อมูลและ Fit curve
         fig.add_trace(go.Scatter(x=x_raw, y=y_raw, mode='markers', name='Raw Data', marker=dict(size=8, color='steelblue')), row=1, col=1)
-        fig.add_trace(go.Scatter(x=xd, y=yd, mode='lines', name='Fit Line', line=dict(color='tomato', width=3)), row=1, col=1)
+        fig.add_trace(go.Scatter(x=xd, y=yd, mode='lines', name=f'{model_choice} Fit', line=dict(color='tomato', width=3)), row=1, col=1)
+        
+        # 🟢 เส้น Tangent (ที่หายไป)
+        fig.add_trace(go.Scatter(x=x_tan, y=y_tan, mode='lines', name='Max slope', line=dict(color='darkorange', width=2, dash='dash'), hovertemplate='t = %{x:.3f} h<br>OD = %{y:.6f}<extra>Tangent</extra>'), row=1, col=1)
+
+        # เส้น Asymptotes
+        fig.add_hline(y=top_disp, line=dict(dash='dash', color='green', width=1), annotation_text=f"Top={top_disp:.4f}", annotation_position="right", row=1, col=1)
+        fig.add_hline(y=bot_disp, line=dict(dash='dash', color='purple', width=1), annotation_text=f"Bot={bot_disp:.4f}", annotation_position="right", row=1, col=1)
+
+        # 🟢 เส้นดิ่ง Vertical Lines (ที่หายไป)
+        fig.add_vline(x=x_bot_intersect, line=dict(color='royalblue', dash='dash', width=1.5), annotation_text=f"Lag = {x_bot_intersect:.2f} h", annotation_position="top left", row=1, col=1)
+        fig.add_vline(x=x_ms, line=dict(color='crimson', dash='dash', width=1.5), row=1, col=1)
+
+        # กราฟ Rate (d/dt)
         fig.add_trace(go.Scatter(x=xd, y=dy, mode='lines', name='Rate', line=dict(color='darkorange')), row=2, col=1)
+        
+        # 🟢 จุด Peak บนกราฟ Rate (ที่หายไป)
+        fig.add_trace(go.Scatter(x=[x_ms], y=[slope_val], mode='markers', name='Peak Rate', marker=dict(color='red', size=10, symbol='circle'), hovertemplate=f't = {x_ms:.3f} h<br>Peak = {slope_val:.5f} /h<extra>Max rate</extra>'), row=2, col=1)
+        fig.add_vline(x=x_bot_intersect, line=dict(color='royalblue', dash='dash', width=1), row=2, col=1)
+        fig.add_vline(x=x_ms, line=dict(color='crimson', dash='dash', width=1), row=2, col=1)
 
-        # เส้นกำกับและสเกล
-        fig.add_hline(y=popt[1], line=dict(dash='dash', color='green', width=1), annotation_text="Top", row=1, col=1)
-        fig.add_hline(y=popt[0], line=dict(dash='dash', color='purple', width=1), annotation_text="Bot", row=1, col=1)
-
-        # ล็อกสเกลตามโหมดที่เลือก (ดึงค่าจาก State)
+        # ล็อกสเกลหน้าจอตามโหมดที่เลือก (ดึงค่าจาก State)
         fig.update_layout(
             height=st.session_state['export_h'] if not use_container_width else 800, 
             width=st.session_state['export_w'] if not use_container_width else None, 
