@@ -72,50 +72,40 @@ MODEL_DEFS = {
 # ── Sidebar ────────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.header("📥 ข้อมูลและโมเดล")
-    title_input = st.text_input("ชื่อกราฟ", value="Growth Fit")
-    model_choice = st.selectbox("โมเดล", options=list(MODEL_DEFS.keys()), index=0)
-    x_input = st.text_area("Time [h]", height=100, placeholder="0 0.5 1 1.5 2 ...")
-    y_input = st.text_area("OD / Signal", height=100, placeholder="0.097 0.100 0.150 ...")
+    title_input = st.text_input("ชื่อกราฟ", value="Growth Curve Analysis")
+    model_choice = st.selectbox("เลือกโมเดล (Default: Gompertz)", options=list(MODEL_DEFS.keys()), index=0)
+    x_input = st.text_area("Time [h]", height=100, placeholder="0 1 2 3...")
+    y_input = st.text_area("OD / Signal", height=100, placeholder="0.1 0.2 0.5...")
 
     st.divider()
     
-    # ── การตั้งค่าแกน (Axis Settings) ──
-    st.header("📏 การตั้งค่าแกน")
-    scale_mode = st.radio("รูปแบบสเกลแกน", ["Auto (อัตโนมัติ)", "Manual (กำหนดเอง)"])
+    # ── 📏 ตั้งค่าขนาดภาพและสัดส่วน (Aspect Ratio Settings) ──
+    st.header("📏 ตั้งค่าขนาดภาพ (Export)")
+    export_mode = st.radio("รูปแบบการแสดงผล", ["Responsive (Auto)", "Fixed Size (Manual)"], help="Fixed Size จะช่วยให้เซฟภาพออกมาขนาดเท่ากันทุกเครื่อง")
     
-    # ดึงค่า x, y มาคำนวณเบื้องต้นสำหรับ Default Manual
-    x_raw = parse_values(x_input)
-    y_raw = parse_values(y_input)
-    
-    if scale_mode == "Manual (กำหนดเอง)" and len(x_raw) > 0 and len(y_raw) > 0:
-        col1, col2 = st.columns(2)
-        with col1:
-            x_min_val = st.number_input("X Min", value=float(min(x_raw)))
-            y_min_val = st.number_input("Y Min", value=float(min(y_raw)))
-        with col2:
-            x_max_val = st.number_input("X Max", value=float(max(x_raw) * 1.1))
-            y_max_val = st.number_input("Y Max", value=float(max(y_raw) * 1.2))
-        fixed_x_range = [x_min_val, x_max_val]
-        fixed_y_range = [y_min_val, y_max_val]
+    if export_mode == "Fixed Size (Manual)":
+        export_w = st.slider("ความกว้างภาพ (Width px)", 600, 1920, 1000)
+        export_h = st.slider("ความสูงภาพ (Height px)", 400, 1440, 700)
+        use_container_width = False
     else:
-        # ค่า Auto เดิม
-        if len(x_raw) > 0 and len(y_raw) > 0:
-            x_pad = (max(x_raw) - min(x_raw)) * 0.05
-            y_pad = (max(y_raw) - min(y_raw)) * 0.20
-            fixed_x_range = [min(x_raw) - x_pad, max(x_raw) + x_pad]
-            fixed_y_range = [min(y_raw) - y_pad, max(y_raw) + y_pad]
-        else:
-            fixed_x_range = None
-            fixed_y_range = None
+        export_w = None
+        export_h = 800 # Default height for auto mode
+        use_container_width = True
 
-    with st.expander("🧮 ดูสมการ (Equations)"):
+    st.divider()
+    
+    with st.expander("🧮 ดูสมการที่ใช้ (Equations)"):
         st.markdown("**1. Modified Gompertz**")
-        st.latex(r"y(t) = bot + A \cdot \exp\left(-\exp\left[\frac{\mu_{max} \cdot e}{A}(\lambda - t) + 1\right]\right)")
-        st.divider()
+        st.latex(r"y(t) = bot + A \cdot e^{-e^{\frac{\mu_{max} \cdot e}{A}(\lambda - t) + 1}}")
         st.markdown("**2. Baranyi-Roberts**")
         st.latex(r"y(t) = bot + \mu_{max} A(t) - \ln \left( 1 + \frac{e^{\mu_{max} A(t)} - 1}{e^{top - bot}} \right)")
+        st.markdown("**3. Weibull Growth**")
+        st.latex(r"y(t) = bot + (top - bot) (1 - e^{-(\frac{t - \lambda}{scale})^{shape}})")
 
 # ── Main ───────────────────────────────────────────────────────────────────────
+x_raw = parse_values(x_input)
+y_raw = parse_values(y_input)
+
 if len(x_raw) >= 4 and len(x_raw) == len(y_raw):
     mdef = MODEL_DEFS[model_choice]
     try:
@@ -131,34 +121,45 @@ if len(x_raw) >= 4 and len(x_raw) == len(y_raw):
         c[2].metric("AIC", f"{aic:.2f}")
         c[3].metric("BIC", f"{bic:.2f}")
 
-        # กราฟและการคำนวณเส้นสัมผัส
+        # การคำนวณเส้นสัมผัสและพารามิเตอร์
         xd = np.linspace(x_raw.min(), x_raw.max(), 5000)
         yd = mdef["func"](xd, *popt)
         dy = np.gradient(yd, xd)
         idx = np.argmax(dy)
         x_ms, slope_val, y_ms = xd[idx], dy[idx], yd[idx]
-        y_tan = slope_val * (np.linspace(x_ms-2, x_ms+2, 100) - x_ms) + y_ms
-        c[4].metric("Max Slope", f"{slope_val:.4f}/h")
+        c[4].metric("Max Rate", f"{slope_val:.4f}/h")
 
-        st.write("**Parameters:**")
+        st.write("**Parameters Table:**")
         st.table({n: [f"{v:.6f}"] for n, v in zip(mdef["param_names"], popt)})
 
         # ── Chart Plotly ──
-        fig = make_subplots(rows=2, cols=1, row_heights=[0.75, 0.25], shared_xaxes=True, vertical_spacing=0.04, subplot_titles=(title_input, "Growth Rate"))
-        fig.add_trace(go.Scatter(x=x_raw, y=y_raw, mode='markers', name='Raw Data'), row=1, col=1)
-        fig.add_trace(go.Scatter(x=xd, y=yd, mode='lines', name='Fit Line', line=dict(color='tomato')), row=1, col=1)
+        fig = make_subplots(rows=2, cols=1, row_heights=[0.75, 0.25], shared_xaxes=True, vertical_spacing=0.05, subplot_titles=(title_input, "Growth Rate (d/dt)"))
+        
+        fig.add_trace(go.Scatter(x=x_raw, y=y_raw, mode='markers', name='Raw Data', marker=dict(size=8, color='steelblue')), row=1, col=1)
+        fig.add_trace(go.Scatter(x=xd, y=yd, mode='lines', name='Fit Line', line=dict(color='tomato', width=3)), row=1, col=1)
         fig.add_trace(go.Scatter(x=xd, y=dy, mode='lines', name='Rate', line=dict(color='darkorange')), row=2, col=1)
 
-        # เพิ่มเส้น Asymptotes และ Tangent
-        fig.add_hline(y=popt[1], line=dict(dash='dash', color='green'), row=1, col=1)
-        fig.add_hline(y=popt[0], line=dict(dash='dash', color='purple'), row=1, col=1)
+        # เส้นกำกับและสเกล
+        fig.add_hline(y=popt[1], line=dict(dash='dash', color='green', width=1), annotation_text="Top", row=1, col=1)
+        fig.add_hline(y=popt[0], line=dict(dash='dash', color='purple', width=1), annotation_text="Bot", row=1, col=1)
 
-        fig.update_layout(height=800, template="plotly_white")
-        fig.update_xaxes(range=fixed_x_range)
-        fig.update_yaxes(range=fixed_y_range, row=1, col=1)
-        st.plotly_chart(fig, use_container_width=True)
+        # ล็อกสเกลตามโหมดที่เลือก
+        fig.update_layout(
+            height=export_h, 
+            width=export_w, 
+            template="plotly_white",
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+        )
+        
+        # คงสเกลแกนให้อัตโนมัติเวลาเปลี่ยนโมเดล
+        x_pad = (x_raw.max() - x_raw.min()) * 0.05
+        y_pad = (y_raw.max() - y_raw.min()) * 0.15
+        fig.update_xaxes(range=[x_raw.min() - x_pad, x_raw.max() + x_pad])
+        fig.update_yaxes(range=[y_raw.min() - y_pad, y_raw.max() + y_pad], row=1, col=1)
+
+        st.plotly_chart(fig, use_container_width=use_container_width)
 
     except Exception as e:
         st.error(f"Fit Error: {e}")
 else:
-    st.info("👈 กรุณาใส่ข้อมูลให้ครบถ้วนใน Sidebar")
+    st.info("👈 กรุณาใส่ข้อมูล Time และ OD อย่างน้อย 4 จุดเพื่อเริ่มการวิเคราะห์")
