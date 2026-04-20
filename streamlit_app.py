@@ -47,7 +47,6 @@ def calc_advanced_metrics(y, y_pred, k):
     bic = k * np.log(n) + n * np.log(safe_rss / n)
     return r2, rmse, aic, bic
 
-# สลับ Modified Gompertz ขึ้นมาเป็นตัวแรก เพื่อให้เป็น Default
 MODEL_DEFS = {
     "Modified Gompertz": {
         "func": modified_gompertz, "n_params": 4,
@@ -79,6 +78,24 @@ with st.sidebar:
     model_choice = st.selectbox("โมเดล", options=list(MODEL_DEFS.keys()), index=0)
     x_input = st.text_area("Time [h]  (คั่นด้วย , หรือ space หรือ Enter)", height=100, placeholder="0 0.5 1 1.5 2 ...")
     y_input = st.text_area("OD / Signal", height=100, placeholder="0.097 0.100 0.150 ...")
+    
+    st.divider()
+    
+    # ── ปุ่มดูสมการคณิตศาสตร์ ──
+    with st.expander("🧮 คลิกดูสมการที่ใช้ (Equations)"):
+        st.markdown("**1. Modified Gompertz**")
+        st.latex(r"y(t) = bot + A \cdot \exp\left(-\exp\left[\frac{\mu_{max} \cdot e}{A}(\lambda - t) + 1\right]\right)")
+        st.caption("โดยที่ $A = top - bot$ และ $\lambda = lag$")
+        
+        st.divider()
+        st.markdown("**2. Baranyi-Roberts**")
+        st.latex(r"A(t) = t + \frac{1}{\mu_{max}} \ln \left( e^{-\mu_{max} t} + e^{-\mu_{max} \lambda} - e^{-\mu_{max}(t + \lambda)} \right)")
+        st.latex(r"y(t) = bot + \mu_{max} A(t) - \ln \left( 1 + \frac{e^{\mu_{max} A(t)} - 1}{e^{top - bot}} \right)")
+        
+        st.divider()
+        st.markdown("**3. Weibull Growth**")
+        st.latex(r"y(t) = bot + (top - bot) \left( 1 - e^{-\left(\frac{t - \lambda}{scale}\right)^{shape}} \right)")
+        st.caption("จำกัดเงื่อนไข: $t \ge \lambda$ (ช่วงแรกกราฟจะราบ)")
 
 # ── Main ───────────────────────────────────────────────────────────────────────
 x = parse_values(x_input)
@@ -126,7 +143,7 @@ y_tan = slope_val * (x_tan - x_ms) + y_ms
 
 x_bot_intersect = x_ms - (y_ms - bot_disp) / slope_val if slope_val != 0 else x_ms
 
-# ── คำนวณ Fixed Scale เพื่อไม่ให้กราฟขยับเวลาเปลี่ยนโมเดล ──
+# ── คำนวณ Fixed Scale ──
 x_pad = (x.max() - x.min()) * 0.05
 y_pad = (y.max() - y.min()) * 0.20
 fixed_x_range = [x.min() - x_pad, x.max() + x_pad]
