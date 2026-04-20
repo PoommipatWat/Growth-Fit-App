@@ -69,8 +69,7 @@ MODEL_DEFS = {
     },
 }
 
-# ── จัดการ Session State (คล้ายๆ การจำ Cookie ภายใน Tab นั้น) ──
-# ตั้งค่า Default ถ้าเพิ่งเปิดแอปครั้งแรก
+# ── จัดการ Session State (ระบบความจำ) ──
 if 'export_mode' not in st.session_state:
     st.session_state['export_mode'] = "Responsive (Auto)"
 if 'export_w' not in st.session_state:
@@ -79,6 +78,12 @@ if 'export_h' not in st.session_state:
     st.session_state['export_h'] = 800
 if 'scale_mode' not in st.session_state:
     st.session_state['scale_mode'] = "Auto (อัตโนมัติ)"
+
+# ฟังก์ชันซิงค์ข้อมูลระหว่าง Slider และ Number Input
+def sync_w_from_slider(): st.session_state['export_w'] = st.session_state['w_slider']
+def sync_w_from_num(): st.session_state['export_w'] = st.session_state['w_num']
+def sync_h_from_slider(): st.session_state['export_h'] = st.session_state['h_slider']
+def sync_h_from_num(): st.session_state['export_h'] = st.session_state['h_num']
 
 # ── Sidebar ────────────────────────────────────────────────────────────────────
 with st.sidebar:
@@ -93,35 +98,30 @@ with st.sidebar:
 
     st.divider()
     
-    # ── การตั้งค่าขนาดภาพ ──
+    # ── การตั้งค่าขนาดภาพ (มีทั้ง Slider และ Input) ──
     st.header("📏 ตั้งค่าขนาดภาพ (Export)")
     
-    # อัปเดต Session State ทันทีที่มีการเปลี่ยน Radio
     export_mode = st.radio(
         "รูปแบบการแสดงผล", 
         ["Responsive (Auto)", "Fixed Size (Manual)"], 
         index=0 if st.session_state['export_mode'] == "Responsive (Auto)" else 1,
         key="radio_export_mode"
     )
-    # อัปเดตค่ากลับเข้าไปใน State
     st.session_state['export_mode'] = export_mode
     
     if export_mode == "Fixed Size (Manual)":
-        export_w = st.slider(
-            "ความกว้างภาพ (Width px)", 
-            min_value=600, max_value=2500, 
-            value=st.session_state['export_w'],
-            key="slider_w"
-        )
-        export_h = st.slider(
-            "ความสูงภาพ (Height px)", 
-            min_value=400, max_value=1500, 
-            value=st.session_state['export_h'],
-            key="slider_h"
-        )
-        # จำค่าล่าสุดไว้
-        st.session_state['export_w'] = export_w
-        st.session_state['export_h'] = export_h
+        st.markdown("**ความกว้างภาพ (Width px)**")
+        w_col1, w_col2 = st.columns([3, 1])
+        w_col1.slider("W_Slider", 600, 2500, value=st.session_state['export_w'], key="w_slider", on_change=sync_w_from_slider, label_visibility="collapsed")
+        w_col2.number_input("W_Num", 600, 2500, value=st.session_state['export_w'], key="w_num", step=10, on_change=sync_w_from_num, label_visibility="collapsed")
+
+        st.markdown("**ความสูงภาพ (Height px)**")
+        h_col1, h_col2 = st.columns([3, 1])
+        h_col1.slider("H_Slider", 400, 1500, value=st.session_state['export_h'], key="h_slider", on_change=sync_h_from_slider, label_visibility="collapsed")
+        h_col2.number_input("H_Num", 400, 1500, value=st.session_state['export_h'], key="h_num", step=10, on_change=sync_h_from_num, label_visibility="collapsed")
+        
+        export_w = st.session_state['export_w']
+        export_h = st.session_state['export_h']
         use_container_width = False
     else:
         export_w = None
@@ -141,15 +141,10 @@ with st.sidebar:
     st.session_state['scale_mode'] = scale_mode
     
     if scale_mode == "Manual (กำหนดเอง)" and len(x_raw) > 0 and len(y_raw) > 0:
-        # ถ้าไม่มี State ของพิกัด ให้ตั้งเป็นค่า Min/Max ของข้อมูลปัจจุบัน
-        if 'x_min_val' not in st.session_state:
-            st.session_state['x_min_val'] = float(min(x_raw))
-        if 'x_max_val' not in st.session_state:
-            st.session_state['x_max_val'] = float(max(x_raw) * 1.1)
-        if 'y_min_val' not in st.session_state:
-            st.session_state['y_min_val'] = float(min(y_raw))
-        if 'y_max_val' not in st.session_state:
-            st.session_state['y_max_val'] = float(max(y_raw) * 1.2)
+        if 'x_min_val' not in st.session_state: st.session_state['x_min_val'] = float(min(x_raw))
+        if 'x_max_val' not in st.session_state: st.session_state['x_max_val'] = float(max(x_raw) * 1.1)
+        if 'y_min_val' not in st.session_state: st.session_state['y_min_val'] = float(min(y_raw))
+        if 'y_max_val' not in st.session_state: st.session_state['y_max_val'] = float(max(y_raw) * 1.2)
 
         col1, col2 = st.columns(2)
         with col1:
@@ -159,7 +154,6 @@ with st.sidebar:
             x_max_val = st.number_input("X Max", value=st.session_state['x_max_val'], key="x_max_val_input")
             y_max_val = st.number_input("Y Max", value=st.session_state['y_max_val'], key="y_max_val_input")
             
-        # จำค่าแกนล่าสุดไว้
         st.session_state['x_min_val'] = x_min_val
         st.session_state['x_max_val'] = x_max_val
         st.session_state['y_min_val'] = y_min_val
