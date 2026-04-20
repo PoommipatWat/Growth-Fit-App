@@ -69,6 +69,17 @@ MODEL_DEFS = {
     },
 }
 
+# ── จัดการ Session State (คล้ายๆ การจำ Cookie ภายใน Tab นั้น) ──
+# ตั้งค่า Default ถ้าเพิ่งเปิดแอปครั้งแรก
+if 'export_mode' not in st.session_state:
+    st.session_state['export_mode'] = "Responsive (Auto)"
+if 'export_w' not in st.session_state:
+    st.session_state['export_w'] = 1200
+if 'export_h' not in st.session_state:
+    st.session_state['export_h'] = 800
+if 'scale_mode' not in st.session_state:
+    st.session_state['scale_mode'] = "Auto (อัตโนมัติ)"
+
 # ── Sidebar ────────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.header("📥 ข้อมูลและโมเดล")
@@ -77,23 +88,95 @@ with st.sidebar:
     x_input = st.text_area("Time [h]", height=100, placeholder="0 1 2 3...")
     y_input = st.text_area("OD / Signal", height=100, placeholder="0.1 0.2 0.5...")
 
+    x_raw = parse_values(x_input)
+    y_raw = parse_values(y_input)
+
     st.divider()
     
-    # ── 📏 ตั้งค่าขนาดภาพและสัดส่วน (Aspect Ratio Settings) ──
+    # ── การตั้งค่าขนาดภาพ ──
     st.header("📏 ตั้งค่าขนาดภาพ (Export)")
-    export_mode = st.radio("รูปแบบการแสดงผล", ["Responsive (Auto)", "Fixed Size (Manual)"], help="Fixed Size จะช่วยให้เซฟภาพออกมาขนาดเท่ากันทุกเครื่อง")
+    
+    # อัปเดต Session State ทันทีที่มีการเปลี่ยน Radio
+    export_mode = st.radio(
+        "รูปแบบการแสดงผล", 
+        ["Responsive (Auto)", "Fixed Size (Manual)"], 
+        index=0 if st.session_state['export_mode'] == "Responsive (Auto)" else 1,
+        key="radio_export_mode"
+    )
+    # อัปเดตค่ากลับเข้าไปใน State
+    st.session_state['export_mode'] = export_mode
     
     if export_mode == "Fixed Size (Manual)":
-        export_w = st.slider("ความกว้างภาพ (Width px)", 600, 1920, 1000)
-        export_h = st.slider("ความสูงภาพ (Height px)", 400, 1440, 700)
+        export_w = st.slider(
+            "ความกว้างภาพ (Width px)", 
+            min_value=600, max_value=2500, 
+            value=st.session_state['export_w'],
+            key="slider_w"
+        )
+        export_h = st.slider(
+            "ความสูงภาพ (Height px)", 
+            min_value=400, max_value=1500, 
+            value=st.session_state['export_h'],
+            key="slider_h"
+        )
+        # จำค่าล่าสุดไว้
+        st.session_state['export_w'] = export_w
+        st.session_state['export_h'] = export_h
         use_container_width = False
     else:
         export_w = None
-        export_h = 800 # Default height for auto mode
+        export_h = 800 
         use_container_width = True
 
     st.divider()
     
+    # ── การตั้งค่าสเกลแกน ──
+    st.header("🎯 การตั้งค่าแกนกราฟ")
+    scale_mode = st.radio(
+        "รูปแบบสเกลแกน", 
+        ["Auto (อัตโนมัติ)", "Manual (กำหนดเอง)"],
+        index=0 if st.session_state['scale_mode'] == "Auto (อัตโนมัติ)" else 1,
+        key="radio_scale_mode"
+    )
+    st.session_state['scale_mode'] = scale_mode
+    
+    if scale_mode == "Manual (กำหนดเอง)" and len(x_raw) > 0 and len(y_raw) > 0:
+        # ถ้าไม่มี State ของพิกัด ให้ตั้งเป็นค่า Min/Max ของข้อมูลปัจจุบัน
+        if 'x_min_val' not in st.session_state:
+            st.session_state['x_min_val'] = float(min(x_raw))
+        if 'x_max_val' not in st.session_state:
+            st.session_state['x_max_val'] = float(max(x_raw) * 1.1)
+        if 'y_min_val' not in st.session_state:
+            st.session_state['y_min_val'] = float(min(y_raw))
+        if 'y_max_val' not in st.session_state:
+            st.session_state['y_max_val'] = float(max(y_raw) * 1.2)
+
+        col1, col2 = st.columns(2)
+        with col1:
+            x_min_val = st.number_input("X Min", value=st.session_state['x_min_val'], key="x_min_val_input")
+            y_min_val = st.number_input("Y Min", value=st.session_state['y_min_val'], key="y_min_val_input")
+        with col2:
+            x_max_val = st.number_input("X Max", value=st.session_state['x_max_val'], key="x_max_val_input")
+            y_max_val = st.number_input("Y Max", value=st.session_state['y_max_val'], key="y_max_val_input")
+            
+        # จำค่าแกนล่าสุดไว้
+        st.session_state['x_min_val'] = x_min_val
+        st.session_state['x_max_val'] = x_max_val
+        st.session_state['y_min_val'] = y_min_val
+        st.session_state['y_max_val'] = y_max_val
+        
+        fixed_x_range = [x_min_val, x_max_val]
+        fixed_y_range = [y_min_val, y_max_val]
+    else:
+        if len(x_raw) > 0 and len(y_raw) > 0:
+            x_pad = (max(x_raw) - min(x_raw)) * 0.05
+            y_pad = (max(y_raw) - min(y_raw)) * 0.20
+            fixed_x_range = [min(x_raw) - x_pad, max(x_raw) + x_pad]
+            fixed_y_range = [min(y_raw) - y_pad, max(y_raw) + y_pad]
+        else:
+            fixed_x_range = None
+            fixed_y_range = None
+
     with st.expander("🧮 ดูสมการที่ใช้ (Equations)"):
         st.markdown("**1. Modified Gompertz**")
         st.latex(r"y(t) = bot + A \cdot e^{-e^{\frac{\mu_{max} \cdot e}{A}(\lambda - t) + 1}}")
@@ -103,9 +186,6 @@ with st.sidebar:
         st.latex(r"y(t) = bot + (top - bot) (1 - e^{-(\frac{t - \lambda}{scale})^{shape}})")
 
 # ── Main ───────────────────────────────────────────────────────────────────────
-x_raw = parse_values(x_input)
-y_raw = parse_values(y_input)
-
 if len(x_raw) >= 4 and len(x_raw) == len(y_raw):
     mdef = MODEL_DEFS[model_choice]
     try:
@@ -143,19 +223,16 @@ if len(x_raw) >= 4 and len(x_raw) == len(y_raw):
         fig.add_hline(y=popt[1], line=dict(dash='dash', color='green', width=1), annotation_text="Top", row=1, col=1)
         fig.add_hline(y=popt[0], line=dict(dash='dash', color='purple', width=1), annotation_text="Bot", row=1, col=1)
 
-        # ล็อกสเกลตามโหมดที่เลือก
+        # ล็อกสเกลตามโหมดที่เลือก (ดึงค่าจาก State)
         fig.update_layout(
-            height=export_h, 
-            width=export_w, 
+            height=st.session_state['export_h'] if not use_container_width else 800, 
+            width=st.session_state['export_w'] if not use_container_width else None, 
             template="plotly_white",
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
         )
         
-        # คงสเกลแกนให้อัตโนมัติเวลาเปลี่ยนโมเดล
-        x_pad = (x_raw.max() - x_raw.min()) * 0.05
-        y_pad = (y_raw.max() - y_raw.min()) * 0.15
-        fig.update_xaxes(range=[x_raw.min() - x_pad, x_raw.max() + x_pad])
-        fig.update_yaxes(range=[y_raw.min() - y_pad, y_raw.max() + y_pad], row=1, col=1)
+        fig.update_xaxes(range=fixed_x_range)
+        fig.update_yaxes(range=fixed_y_range, row=1, col=1)
 
         st.plotly_chart(fig, use_container_width=use_container_width)
 
